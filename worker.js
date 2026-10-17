@@ -12,6 +12,57 @@ async function readSession(req,env) { try { const raw=(req.headers.get("Cookie")
 const cookieHeader = async (data,env) => ({"set-cookie":await makeCookie(data,env)});
 async function rows(env) { const r=await env.DB.prepare("SELECT id,name,suffix,status,answer,box,points,datetime(created_at,'localtime') AS date FROM entries ORDER BY id DESC").all(); return r.results || []; }
 async function asset(path,request,env) { const url=new URL(request.url); url.pathname=path; return env.ASSETS.fetch(new Request(url.toString(),request)); }
+const ADMIN_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Administration Dinice.X</title><link rel="stylesheet" href="/style.css"><style>
+main{max-width:1100px}#dash{max-width:100%}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0}
+.stat{background:#fff7ee;border:1px solid #efdfd4;border-radius:14px;padding:12px;text-align:center}
+.stat b{display:block;font:900 24px Montserrat;color:var(--red)}.stat small{color:#65726b;font-size:11px;font-weight:700}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+.bar input{flex:1;min-width:180px}
+.btn{display:inline-block;border:0;border-radius:12px;padding:14px 18px;font:800 13px Montserrat;cursor:pointer;text-decoration:none;text-align:center;color:#fff}
+.btn.g{background:#075c39}.btn.r{background:#bd111b}
+.wrap{overflow:auto;max-height:70vh;border:1px solid #e5d8ce;border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:720px}
+th,td{border:1px solid #e5d8ce;padding:9px 11px;text-align:left;white-space:nowrap}
+th{background:#075c39;color:#fff;position:sticky;top:0;font-weight:700}
+tbody tr:nth-child(even){background:#fbf5ee}
+.ok{color:#075c39;font-weight:700}.ko{color:#bd111b;font-weight:700}
+</style></head><body><header><div class="logo"><img src="/logo.png" alt="Logo" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span>DINICE.X<br>PIZZA</span></div><div><b>DINICE.X PIZZA</b><small>Administration</small></div><label class="tag">ESPACE ADMIN</label></header><main><section class="hero"><h1>TABLEAU DES <em>COTES</em></h1><p>Consulte les résultats en direct et télécharge le fichier Excel.</p></section><section class="panel" id="dash"><h2>Participations</h2><div class="stats" id="stats"></div><div class="bar"><input id="q" placeholder="Rechercher un nom, un statut, une boîte..."><button class="btn r" id="refresh" type="button">↻ Actualiser</button><a class="btn g" id="xl" href="#">↓ Télécharger Excel (.xlsx)</a></div><div class="wrap"><table><thead><tr><th>ID</th><th>Nom WhatsApp</th><th>3 derniers chiffres</th><th>Statut</th><th>Réponse</th><th>Boîte</th><th>Cote (points)</th><th>Date</th></tr></thead><tbody id="rows"></tbody></table></div><p id="note"></p></section></main><script>
+var $=function(x){return document.getElementById(x)};
+var base=location.pathname;while(base.length>1&&base.charAt(base.length-1)=="/")base=base.slice(0,-1);
+$("xl").href=base+"/export.xlsx";
+var all=[];
+function stat(label,value){var d=document.createElement("div");d.className="stat";var b=document.createElement("b");b.textContent=value;var s=document.createElement("small");s.textContent=label;d.append(b,s);return d}
+function draw(){
+  var q=$("q").value.trim().toLowerCase();
+  var list=all.filter(function(p){return !q||[p.name,p.suffix,p.status,p.answer,p.box,p.date].join(" ").toLowerCase().indexOf(q)>-1});
+  $("rows").replaceChildren();
+  list.forEach(function(p){
+    var tr=document.createElement("tr");
+    [p.id,p.name,p.suffix,p.status,p.answer||"",p.box||"—",p.points,p.date].forEach(function(v,i){
+      var td=document.createElement("td");td.textContent=v;
+      if(i==3)td.className=(p.status=="Échec")?"ko":"ok";
+      tr.append(td)
+    });
+    $("rows").append(tr)
+  });
+  $("note").textContent=list.length+" ligne(s) affichée(s) sur "+all.length;
+}
+async function load(){
+  try{
+    var r=await fetch(base+"/entries",{cache:"no-store"});
+    if(!r.ok){$("note").textContent="Erreur de chargement";return}
+    var d=await r.json();all=d.entries;
+    var pts=0,fin=0,fail=0;
+    all.forEach(function(p){pts+=Number(p.points)||0;if(p.status=="Terminé")fin++;if(p.status=="Échec")fail++});
+    $("stats").replaceChildren(stat("Participations",all.length),stat("Terminées",fin),stat("Échecs",fail),stat("Total points",pts));
+    draw();
+  }catch(e){$("note").textContent="Erreur de connexion"}
+}
+$("q").addEventListener("input",draw);
+$("refresh").addEventListener("click",load);
+load();setInterval(load,30000);
+</script></body></html>`;
 export default { async fetch(request, env) {
  const url=new URL(request.url), path=url.pathname.replace(/\/+$/,"/"); const admin=adminPath(env);
  try {
@@ -38,13 +89,13 @@ export default { async fetch(request, env) {
    if(!r.meta.changes)return json({error:"Participation déjà terminée"},409);
    return json({box:b,points:BOXES[b]},200,await cookieHeader({stage:"done"},env));
   }
-  if(path===admin+"/entries" && request.method==="GET") return json({entries:(await rows(env)).map(p=>({name:p.name,suffix:p.suffix,status:p.status,box:p.box||"",points:p.points||0,date:p.date||""}))});
+    if(path===admin+"/entries" && request.method==="GET") return json({entries:(await rows(env)).map(p=>({id:p.id,name:p.name,suffix:p.suffix,status:p.status,answer:p.answer||"",box:p.box||"",points:p.points||0,date:p.date||""}))},200,{"cache-control":"no-store"});
   if(path===admin+"/export.xlsx" && request.method==="GET") {
    const data=(await rows(env)).map(p=>({ID:p.id,"Nom WhatsApp":p.name,"3 derniers chiffres":p.suffix,Statut:p.status,Réponse:p.answer||"",Boîte:p.box||"", "Cote (points)":p.points||0,Date:p.date||""}));
    const ws=XLSX.utils.json_to_sheet(data.length?data:[{Information:"Aucune participation"}]), wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Cotes");
    const bytes=XLSX.write(wb,{type:"array",bookType:"xlsx"}); return new Response(bytes,{headers:{"content-type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","content-disposition":"attachment; filename=\"DiniceX_Cotes.xlsx\"","cache-control":"no-store"}});
   }
-  if(path===admin && request.method==="GET") return asset("/admin.html",request,env);
+    if((path===admin||path===admin+"/") && request.method==="GET") return new Response(ADMIN_HTML,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-robots-tag":"noindex"}});
   return env.ASSETS.fetch(request);
  } catch(e) { console.error(e); return json({error:"Erreur serveur. Vérifie la configuration Cloudflare et la base D1."},500); }
 }};
