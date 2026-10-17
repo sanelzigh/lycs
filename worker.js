@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 const BOXES = { A: 10, B: 5, C: 20 };
 const norm = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
-const adminPath = (env) => "/" + String(env.ADMIN_PATH || "gestion-7xP9k").replace(/^\/+|\/+$/g, "");
+const adminPath = (env) => "/tableau-dinicex-2026";
 const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
 const fromB64url = (s) => Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/") + "===".slice((s.length+3)%4)), c=>c.charCodeAt(0));
 async function key(env) { return crypto.subtle.importKey("raw", new TextEncoder().encode(env.SESSION_SECRET || "replace-this-secret-in-cloudflare-settings"), {name:"HMAC",hash:"SHA-256"}, false, ["sign","verify"]); }
@@ -63,6 +63,7 @@ $("q").addEventListener("input",draw);
 $("refresh").addEventListener("click",load);
 load();setInterval(load,30000);
 </script></body></html>`;
+
 export default { async fetch(request, env) {
  const url=new URL(request.url), path=url.pathname.replace(/\/+$/,"/"); const admin=adminPath(env);
  try {
@@ -89,13 +90,13 @@ export default { async fetch(request, env) {
    if(!r.meta.changes)return json({error:"Participation déjà terminée"},409);
    return json({box:b,points:BOXES[b]},200,await cookieHeader({stage:"done"},env));
   }
-    if(path===admin+"/entries" && request.method==="GET") return json({entries:(await rows(env)).map(p=>({id:p.id,name:p.name,suffix:p.suffix,status:p.status,answer:p.answer||"",box:p.box||"",points:p.points||0,date:p.date||""}))},200,{"cache-control":"no-store"});
+  if(path===admin+"/entries" && request.method==="GET") return json({entries:(await rows(env)).map(p=>({id:p.id,name:p.name,suffix:p.suffix,status:p.status,answer:p.answer||"",box:p.box||"",points:p.points||0,date:p.date||""}))},200,{"cache-control":"no-store"});
   if(path===admin+"/export.xlsx" && request.method==="GET") {
    const data=(await rows(env)).map(p=>({ID:p.id,"Nom WhatsApp":p.name,"3 derniers chiffres":p.suffix,Statut:p.status,Réponse:p.answer||"",Boîte:p.box||"", "Cote (points)":p.points||0,Date:p.date||""}));
    const ws=XLSX.utils.json_to_sheet(data.length?data:[{Information:"Aucune participation"}]), wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Cotes");
    const bytes=XLSX.write(wb,{type:"array",bookType:"xlsx"}); return new Response(bytes,{headers:{"content-type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","content-disposition":"attachment; filename=\"DiniceX_Cotes.xlsx\"","cache-control":"no-store"}});
   }
-    if((path===admin||path===admin+"/") && request.method==="GET") return new Response(ADMIN_HTML,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-robots-tag":"noindex"}});
+  if((path===admin||path===admin+"/") && request.method==="GET") return new Response(ADMIN_HTML,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-robots-tag":"noindex"}});
   return env.ASSETS.fetch(request);
  } catch(e) { console.error(e); return json({error:"Erreur serveur. Vérifie la configuration Cloudflare et la base D1."},500); }
 }};
