@@ -1,0 +1,11 @@
+node_modules
+.wrangler
+.git
+.gitignore
+.assetsignore
+worker.js
+wrangler.jsonc
+package.json
+package-lock.json
+schema.sql
+README_CLOUDFLARE.md
