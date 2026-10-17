@@ -9,3 +9,5 @@ package.json
 package-lock.json
 schema.sql
 README_CLOUDFLARE.md
+admin.html
+admin.js
